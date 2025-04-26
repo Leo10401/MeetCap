@@ -1,0 +1,77 @@
+#caption-saver-sidebar {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #202124;
+}
+
+#sidebar-record-button {
+  transition: background-color 0.3s ease;
+}
+
+#sidebar-record-button:hover {
+  filter: brightness(0.9);
+}
+
+#sidebar-export-button:hover {
+  filter: brightness(0.9);
+}
+
+#caption-saver-toggle {
+  transition: transform 0.2s ease;
+}
+
+#caption-saver-toggle:hover {
+  transform: scale(1.05);
+}
+
+#sidebar-captions-list {
+  scrollbar-width: thin;
+  scrollbar-color: #dadce0 #f8f9fa;
+  padding: 0 5px;
+}
+
+#sidebar-captions-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+#sidebar-captions-list::-webkit-scrollbar-track {
+  background: #f8f9fa;
+}
+
+#sidebar-captions-list::-webkit-scrollbar-thumb {
+  background-color: #dadce0;
+  border-radius: 3px;
+}
+
+.caption-entry {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eeeeee;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.caption-speaker {
+  font-weight: bold;
+  color: #1a73e8;
+}
+
+.caption-time {
+  font-size: 11px;
+  color: #5f6368;
+  margin-bottom: 3px;
+}
+
+.caption-text {
+  line-height: 1.4;
+}
+
+.no-captions {
+  color: #5f6368;
+  font-style: italic;
+  text-align: center;
+  margin-top: 20px;
+} 

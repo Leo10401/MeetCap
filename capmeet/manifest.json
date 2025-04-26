@@ -1,0 +1,35 @@
+{
+    "manifest_version": 3,
+    "name": "Capmeet",
+    "version": "1.0",
+    "description": "Save and export Google Meet captions with speaker names",
+    "permissions": [
+        "storage",
+        "scripting"
+    ],
+    "host_permissions": [
+        "https://meet.google.com/*",
+        "http://localhost:3000/*" 
+    ],
+    "background": {
+        "service_worker": "background.js",
+        "type": "module"
+    },
+    "action": {
+        "default_title": "Google Meet Caption Saver"
+    },
+    "content_scripts": [
+        {
+            "matches": ["https://meet.google.com/*"],
+            "js": ["content.js"],
+            "run_at": "document_idle"
+        }
+    ],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self'; object-src 'self'"
+    },
+    "web_accessible_resources": [{
+        "resources": ["icons/*", "sidebar.css"],
+        "matches": ["https://meet.google.com/*"]
+    }]
+}
