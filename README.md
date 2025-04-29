@@ -1,6 +1,6 @@
-# CapMeet - Google Meet Caption Saver & Summarizer
+# MeetCap - Google Meet Caption Saver & Summarizer
 
-CapMeet is a Chrome extension that captures and saves captions from Google Meet meetings, with the additional ability to generate AI-powered summaries of your meeting content.
+MeetCap is a Chrome extension that captures and saves captions from Google Meet meetings, with the additional ability to generate AI-powered summaries of your meeting content.
 
 ## Features
 
