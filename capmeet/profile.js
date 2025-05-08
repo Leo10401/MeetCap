@@ -2,7 +2,7 @@
 
 document.addEventListener('DOMContentLoaded', function() {
   // Get server URL from storage
-  let backendUrl = 'http://localhost:3000';
+  let backendUrl = 'http://localhost:5000';
   let authToken = null;
   let userData = null;
   

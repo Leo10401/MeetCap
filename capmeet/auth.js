@@ -2,7 +2,7 @@
 
 document.addEventListener('DOMContentLoaded', function() {
   // Get server URL from storage
-  let backendUrl = 'http://localhost:3000';
+  let backendUrl = 'http://localhost:5000';
   chrome.storage.sync.get(['backendUrl'], function(result) {
     if (result.backendUrl) {
       backendUrl = result.backendUrl;

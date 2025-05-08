@@ -6,7 +6,7 @@ let lastProcessedTimestamp = 0;
 let captionObserver = null;
 let capturedCaptions = [];
 let sidebarInjected = false;
-let backendUrl = 'http://localhost:3000'; // Default backend server URL
+let backendUrl = 'http://localhost:5000'; // Default backend server URL
 let authToken = null;
 let userData = null;
 let isLoggedIn = false;
@@ -1180,11 +1180,13 @@ function summarizeCaptions() {
       },
       body: JSON.stringify(captionData)
     })
-    .then(response => {
+    .then(async response => {
+      const text = await response.text();
+      console.log('Response:', text);
       if (!response.ok) {
-        throw new Error('Failed to generate summary');
+        throw new Error(`Server responded with ${response.status}: ${text}`);
       }
-      return response.json();
+      return JSON.parse(text);
     })
     .then(data => {
       // Update summary content
