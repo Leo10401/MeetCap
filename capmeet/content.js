@@ -670,6 +670,101 @@ function stopRecording() {
   
   // Notify popup that recording has stopped
   chrome.runtime.sendMessage({action: "recordingStatus", status: false});
+
+  // Automatically generate summary and save to account
+  if (captionData.length > 0) {
+    const statusElement = document.getElementById('sidebar-status');
+    if (statusElement) {
+      statusElement.textContent = "Generating summary...";
+    }
+
+    // Generate summary
+    fetch(`${backendUrl}/api/summarize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(captionData)
+    })
+    .then(async response => {
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}: ${text}`);
+      }
+      return JSON.parse(text);
+    })
+    .then(data => {
+      // Update summary content
+      const summaryContainer = document.getElementById('summary-container');
+      const summaryContent = document.getElementById('summary-content');
+      if (summaryContainer && summaryContent) {
+        summaryContainer.style.display = 'block';
+        summaryContent.textContent = data.summary;
+      }
+
+      // If user is logged in, automatically save to account
+      if (isLoggedIn && authToken) {
+        // Create a title for the meeting using the current date and time
+        const now = new Date();
+        const meetingTitle = `Google Meet - ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+        
+        // Extract participant names from captions
+        const participants = [];
+        captionData.forEach(caption => {
+          if (caption.speaker && !participants.includes(caption.speaker)) {
+            participants.push(caption.speaker);
+          }
+        });
+        
+        // Create meeting data
+        const meetingData = {
+          title: meetingTitle,
+          participants: participants,
+          rawCaptions: captionData,
+          summary: data.summary,
+          notes: '',  // User can add notes later
+          tags: ['Google Meet', 'Auto-saved']
+        };
+        
+        // Send to backend
+        return fetch(`${backendUrl}/api/meetings`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-auth-token': authToken
+          },
+          body: JSON.stringify(meetingData)
+        });
+      }
+    })
+    .then(response => {
+      if (response) {
+        if (!response.ok) {
+          return response.json().then(data => {
+            throw new Error(data.message || 'Failed to save meeting');
+          });
+        }
+        // Update status
+        const statusElement = document.getElementById('sidebar-status');
+        if (statusElement) {
+          statusElement.textContent = "Meeting saved successfully";
+          setTimeout(() => {
+            statusElement.textContent = "Not recording";
+          }, 2000);
+        }
+      }
+    })
+    .catch(error => {
+      console.error('Error in auto-save process:', error);
+      const statusElement = document.getElementById('sidebar-status');
+      if (statusElement) {
+        statusElement.textContent = "Error: " + error.message;
+        setTimeout(() => {
+          statusElement.textContent = "Not recording";
+        }, 2000);
+      }
+    });
+  }
 }
 
 // Function to save caption data to local storage
