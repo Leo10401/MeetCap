@@ -3,15 +3,8 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log('CapMeet extension installed');
 });
 
-// Listen for tab updates to inject the content script when on Google Meet
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url && tab.url.includes('meet.google.com')) {
-    chrome.scripting.executeScript({
-      target: { tabId: tabId },
-      files: ['content.js']
-    }).catch(err => console.error('Script injection failed:', err));
-  }
-});
+// Content script is already declared in manifest.json.
+// Do not inject content.js from here, or it will run twice and break state.
 
 // Listen for messages from content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

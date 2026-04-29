@@ -1,17 +1,17 @@
 // content.js - Modified to capture live caption updates more frequently
-let captionData = [];
-let isRecording = false;
-let lastProcessedText = '';
-let lastProcessedTimestamp = 0;
-let captionObserver = null;
-let capturedCaptions = [];
-let sidebarInjected = false;
-let backendUrl = 'http://localhost:5000'; // Default backend server URL
-let authToken = null;
-let userData = null;
-let isLoggedIn = false;
-let debugMode = true; // Set to true to enable additional console logs
-let captionProcessTimer = null;
+var captionData = [];
+var isRecording = false;
+var lastProcessedText = '';
+var lastProcessedTimestamp = 0;
+var captionObserver = null;
+var capturedCaptions = [];
+var sidebarInjected = false;
+var backendUrl = 'http://localhost:5000'; // Default backend server URL
+var authToken = null;
+var userData = null;
+var isLoggedIn = false;
+var debugMode = true; // Set to true to enable additional console logs
+var captionProcessTimer = null;
 
 // Initialize when content script loads
 console.log('Google Meet Caption Saver initializing...');
@@ -853,22 +853,57 @@ function extractSpeakerName(captionElement) {
 // Find the caption container in the DOM
 function findCaptionContainer() {
   const containerSelectors = [
-    'div[role="region"][aria-label="Captions"]',
+    // Primary selectors (most stable)
+    'div[role="region"][aria-label*="Caption" i]',
+    'div[role="region"][aria-label*="caption" i]',
+    
+    // Fallback selectors for different Google Meet versions
+    'div[role="region"]',
+    
+    // CSS class-based selectors (less stable but still useful)
     '.nMcdL.bj4p3b',
     '.adE6rb',
-    '.iOzk7'
+    '.iOzk7',
+    '.bh44bd',
+    '.A8eI7d',
+    '.u7LVg',
+    
+    // Generic caption area patterns
+    'div[aria-label*="caption" i]',
   ];
   
+  // First, try to find the caption container
   for (const selector of containerSelectors) {
-    const container = document.querySelector(selector);
-    if (container) {
-      console.log(`Found caption container with selector: ${selector}`);
-      return container;
+    try {
+      const container = document.querySelector(selector);
+      if (container) {
+        console.log(`✓ Found caption container with selector: ${selector}`);
+        return container;
+      }
+    } catch (e) {
+      console.log(`  Selector "${selector}" caused error (likely invalid), skipping...`);
     }
   }
   
-  console.log('Could not find caption container with any known selector');
-  return null;
+  // If no specific container found, look for any element with recent caption text
+  console.log('No specific caption container found, searching for caption text patterns...');
+  
+  // Look for regions that contain caption-like text
+  const regions = document.querySelectorAll('[role="region"]');
+  for (const region of regions) {
+    const text = region.textContent?.trim() || '';
+    // Caption regions are usually small and contain speaker names
+    if (text.length > 5 && text.length < 500 && !text.includes('\n\n\n')) {
+      if (text.includes(':') || (text.length < 100 && text.match(/^[A-Z]/))) {
+        console.log('✓ Found likely caption region by text pattern');
+        return region;
+      }
+    }
+  }
+  
+  // Last resort: return body and observe mutations there
+  console.warn('Could not find specific caption container, will observe entire page');
+  return document.body;
 }
 
 // Check if text is likely UI text rather than captions
@@ -920,6 +955,50 @@ function isLikelyUIText(text) {
   return false;
 }
 
+function normalizeCaptionText(text) {
+  return (text || '').replace(/\s+/g, ' ').trim();
+}
+
+function getLatestCaptionFromDom(container) {
+  const region = container.matches('[role="region"]')
+    ? container
+    : (container.querySelector('div[role="region"][aria-label*="Caption" i]') || container);
+
+  const textSelectors = [
+    '.ygicle.VbkSUe',
+    '.bh44bd.VbkSUe',
+    '.VbkSUe',
+    '[data-self-name] + div'
+  ].join(',');
+
+  const textCandidates = Array.from(region.querySelectorAll(textSelectors))
+    .filter((el) => !el.closest('.KcIKyf'))
+    .map((el) => ({
+      element: el,
+      text: normalizeCaptionText(el.textContent)
+    }))
+    .filter((item) => item.text.length > 0);
+
+  if (textCandidates.length === 0) {
+    return null;
+  }
+
+  const latest = textCandidates[textCandidates.length - 1];
+  const host = latest.element.parentElement || latest.element;
+
+  const localSpeaker = host.querySelector('.KcIKyf.jxFHg .NWpY1d, .KcIKyf .NWpY1d, .NWpY1d');
+  const allSpeakers = region.querySelectorAll('.KcIKyf.jxFHg .NWpY1d, .KcIKyf .NWpY1d, .NWpY1d');
+  const fallbackSpeaker = allSpeakers.length > 0 ? allSpeakers[allSpeakers.length - 1] : null;
+
+  const speakerName = normalizeCaptionText((localSpeaker || fallbackSpeaker)?.textContent || '').replace(/[:：]$/, '') || 'Unknown';
+
+  return {
+    speakerName,
+    captionText: latest.text,
+    rawText: `${speakerName}: ${latest.text}`
+  };
+}
+
 // Process all captions in the container
 function processCaptions() {
   console.log('Processing captions, isRecording:', isRecording);
@@ -936,26 +1015,15 @@ function processCaptions() {
   }
   
   try {
-    // Get all caption elements using the specific class names
-    const captionElements = container.querySelectorAll('.bh44bd.VbkSUe, .KcIKyf.jxFHg, .KcIKyf, .nMcdL.bj4p3b');
-    
-    console.log(`Found ${captionElements.length} caption elements`);
-    
-    if (!captionElements || captionElements.length === 0) {
-      console.log('No caption elements found in container');
+    const latestCaption = getLatestCaptionFromDom(container);
+    if (!latestCaption) {
+      console.log('No transcript text nodes found yet');
       return;
     }
-    
-    // Get the latest caption element
-    const latestCaptionElement = Array.from(captionElements).pop();
-    if (!latestCaptionElement) {
-      console.log('Could not get latest caption element');
-      return;
-    }
-    
-    // Get the complete caption text
-    const textElement = latestCaptionElement.querySelector('.bh44bd.VbkSUe') || latestCaptionElement;
-    const newText = textElement.textContent.trim();
+
+    const speakerName = latestCaption.speakerName;
+    const captionText = latestCaption.captionText;
+    const newText = latestCaption.rawText;
     
     console.log('Raw caption text found:', newText);
     
@@ -965,29 +1033,7 @@ function processCaptions() {
       return;
     }
     
-    // Use our improved extract function to get speaker name
-    const speakerName = extractSpeakerName(latestCaptionElement);
     console.log('Extracted speaker name:', speakerName);
-    
-    // Remove speaker name from text if present
-    let captionText = newText;
-    if (speakerName !== 'Unknown') {
-      // Try different separator patterns
-      captionText = newText.replace(`${speakerName}:`, '')
-                          .replace(`${speakerName}：`, '')
-                          .replace(`${speakerName} :`, '')
-                          .replace(`${speakerName} ：`, '')
-                          .trim();
-    }
-    
-    // If the caption text is still the same as newText and contains a colon,
-    // try to extract speaker name and text
-    if (captionText === newText && newText.includes(':')) {
-      const parts = newText.split(':');
-      if (parts.length >= 2) {
-        captionText = parts.slice(1).join(':').trim();
-      }
-    }
     
     console.log('Processed caption text:', captionText);
     
@@ -997,8 +1043,8 @@ function processCaptions() {
       return;
     }
     
-    // Only do UI text check if it's not clearly someone speaking
-    if (captionText.length < 10 && isLikelyUIText(captionText)) {
+    // Ignore placeholders like "You" that are speaker labels, not transcript text
+    if (captionText.length <= 3 || isLikelyUIText(captionText)) {
       console.log('Skipping likely UI text');
       return;
     }
@@ -1177,34 +1223,56 @@ function setupCaptionObserver() {
     console.log('Previous observer disconnected');
   }
   
+  // Counter to avoid processing too frequently
+  let processingCount = 0;
+  
   captionObserver = new MutationObserver((mutations) => {
     if (isRecording) {
       try {
-        const hasCaptionChanges = mutations.some(mutation => {
-          // Check if the mutation is happening in a caption container or related to captions
-          let isInCaptionContainer = false;
-          
-          try {
-            // Safe check for closest method
-            if (mutation.target && typeof mutation.target.closest === 'function') {
-              isInCaptionContainer = !!mutation.target.closest('[role="region"][aria-label="Captions"], .nMcdL.bj4p3b, .adE6rb, .iOzk7, .bh44bd, .KcIKyf');
-            }
-          } catch (e) {
-            console.log('Error checking caption container:', e);
-          }
-          
-          // Check for changes in child elements or attributes
-          const hasRelevantChanges = mutation.type === 'childList' || 
-                                    (mutation.type === 'characterData' && mutation.target && mutation.target.textContent && mutation.target.textContent.trim());
-          
-          return isInCaptionContainer || hasRelevantChanges;
-        });
+        // Debounce: only process every few mutations to avoid hammering the processCaptions function
+        processingCount++;
         
-        if (hasCaptionChanges) {
-          console.log('Caption changes detected, processing...');
-          // Use a short debounce to avoid processing captions too frequently
-          clearTimeout(captionProcessTimer);
-          captionProcessTimer = setTimeout(processCaptions, 250);
+        if (processingCount % 2 === 0) { // Process every 2nd mutation
+          const hasCaptionChanges = mutations.some(mutation => {
+            // Check if the mutation is happening in a caption-related area
+            let isInCaptionArea = false;
+            
+            try {
+              const target = mutation.target;
+              
+              // Check if target or any ancestor is a caption area
+              if (target && typeof target.closest === 'function') {
+                isInCaptionArea = !!target.closest([
+                  '[role="region"]',
+                  '.nMcdL.bj4p3b',
+                  '.adE6rb',
+                  '.iOzk7',
+                  '.bh44bd',
+                  '.KcIKyf',
+                  '.A8eI7d',
+                  '.u7LVg'
+                ].join(','));
+              }
+              
+              // Also check if this is text content changing (characterData)
+              const hasTextChange = mutation.type === 'characterData' && 
+                                   target && 
+                                   target.textContent && 
+                                   target.textContent.trim().length > 0;
+              
+              return isInCaptionArea || hasTextChange;
+            } catch (e) {
+              console.log('Error checking caption area:', e);
+              return false;
+            }
+          });
+          
+          if (hasCaptionChanges) {
+            console.log('Caption changes detected, processing...');
+            // Use a short debounce to avoid processing captions too frequently
+            clearTimeout(captionProcessTimer);
+            captionProcessTimer = setTimeout(processCaptions, 300);
+          }
         }
       } catch (error) {
         console.error('Error in mutation observer:', error);
@@ -1215,18 +1283,22 @@ function setupCaptionObserver() {
   // Look for the caption container
   const captionContainer = findCaptionContainer() || document.body;
   
-  // Observe the container or fall back to the entire body if not found
+  console.log('Starting caption observer on:', captionContainer.tagName, captionContainer.className);
+  
+  // Observe the container with optimized settings
   captionObserver.observe(captionContainer, {
     childList: true,
     subtree: true,
     characterData: true,
-    attributes: true
+    characterDataOldValue: false,  // Don't need old value
+    attributes: false,  // Don't watch attributes for now
+    attributeOldValue: false
   });
   
-  console.log('Caption observer started, observing:', captionContainer.tagName);
+  console.log('Caption observer started');
   
-  // Try an initial caption processing
-  setTimeout(processCaptions, 1000);
+  // Try an initial caption processing after a short delay
+  setTimeout(processCaptions, 1500);
 }
 
 // Listen for messages from popup or background script
