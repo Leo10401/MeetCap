@@ -63,6 +63,64 @@ app.post('/api/summarize', async (req, res) => {
   }
 });
 
+// ─── Decision Quality Auditor Proxy Endpoints ─────────────────────────────────
+// These proxy to the Python model service (FastAPI + sklearn)
+const MODEL_SERVICE_URL = process.env.MODEL_SERVICE_URL || 'http://localhost:8000';
+
+// Real-time: audit a single caption for biases
+app.post('/api/audit-single', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) {
+      return res.status(400).json({ error: 'Missing "text" field' });
+    }
+    const response = await axios.post(`${MODEL_SERVICE_URL}/audit-single`, { text });
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error('Error in audit-single proxy:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to audit caption',
+      message: error.response?.data?.detail || error.message
+    });
+  }
+});
+
+// Full transcript audit: segments into decision blocks and audits each
+app.post('/api/audit-decisions', async (req, res) => {
+  try {
+    const captionData = req.body;
+    if (!captionData || !Array.isArray(captionData) || captionData.length === 0) {
+      return res.status(400).json({ error: 'Invalid caption data' });
+    }
+    const response = await axios.post(`${MODEL_SERVICE_URL}/audit-decisions`, captionData);
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error('Error in audit-decisions proxy:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to audit decisions',
+      message: error.response?.data?.detail || error.message
+    });
+  }
+});
+
+// Per-speaker audit: analyzes each speaker's combined text for biases
+app.post('/api/audit-per-speaker', async (req, res) => {
+  try {
+    const captionData = req.body;
+    if (!captionData || !Array.isArray(captionData) || captionData.length === 0) {
+      return res.status(400).json({ error: 'Invalid caption data' });
+    }
+    const response = await axios.post(`${MODEL_SERVICE_URL}/audit-per-speaker`, captionData);
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error('Error in audit-per-speaker proxy:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to audit per-speaker',
+      message: error.response?.data?.detail || error.message
+    });
+  }
+});
+
 // Format conversation from caption data
 function formatConversation(captionData) {
   // Group consecutive captions by the same speaker
